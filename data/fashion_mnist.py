@@ -34,7 +34,7 @@ class FashionMNISTDataset(data.Dataset):
         self.transform = transform
 
     def __len__(self):
-        return images.shape[0]
+        return self.images.shape[0]
 
     def __getitem__(self, idx):
         X = self.images[idx, :].reshape((28, 28, 1))

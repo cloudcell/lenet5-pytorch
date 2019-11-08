@@ -48,7 +48,7 @@ class LeNet5(nn.Module):
             [0, 2, 3, 5]
         ]
 
-        # C4 - 32 params.
+        # S4 - 32 params.
         self.s4_1 = nn.AvgPool2d(kernel_size=2, stride=2)
         self.s4_2 = nn.Conv2d(in_channels=16, out_channels=16, kernel_size=1, groups=16, bias=True)
 
@@ -58,11 +58,12 @@ class LeNet5(nn.Module):
     def forward(self, x):
         # C1
         x = self.c1(x)
+        x = torch.tanh(x)
 
         # S2
         x = self.s2_1(x)
         x = self.s2_2(x)
-        x = F.sigmoid(x)
+        x = torch.tanh(x)
 
         # C3
         c3 = []
@@ -72,18 +73,27 @@ class LeNet5(nn.Module):
             c3.append(self.c3_4_in[i](x[:, self.s2_ch_4_in[i], :, :]))
         c3.append(self.c3_6_in(x))
         x = torch.cat(c3, dim=1)
+        x = torch.tanh(x)
 
         # S4
         x = self.s4_1(x)
         x = self.s4_2(x)
+        x = torch.tanh(x)
 
         # C5
         x = self.c5(x)
+        x = torch.tanh(x)
 
         # F6
         x = x.view((x.shape[0], -1))
         x = nn.Linear(in_features=x.shape[1], out_features=84)(x)
+        x = torch.tanh(x)
 
+        x = nn.Linear(in_features=84, out_features=10)(x)
+
+        # TODO: Change tp log_softmax.
+        # x = F.log_softmax(x, dim=1)
+        x = F.softmax(x, dim=1)
 
         return x
 
@@ -110,3 +120,4 @@ if __name__ == '__main__':
         X, y = batch
         print(X.shape)
         out = model.forward(X)
+        break

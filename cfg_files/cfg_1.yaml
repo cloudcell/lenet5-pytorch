@@ -4,14 +4,16 @@ PATHS:
     DATASET: "/Users/maorshutman/data/FashionMNIST"
 
 TRAIN:
-    BATCH_SIZE: 8
-    LR: 1.0e-2
-    MOMENTUM: 0.0
-    EPOCHS: 10000
+    BATCH_SIZE: 64
+    LR: 5.0e-4
+    MOMENTUM: 0.9
+    EPOCHS: 30
+    STEPS_PER_EPOCH: -1
     BATCHNORM: False
     DROPOUT: False
     LOG_INTERVAL: 30
-    LOG_DIR: "./logs/runs_2"
+    LOG_DIR: "./logs/runs_17"
 
 TEST:
-    BATCH_SIZE: 64
+    BATCH_SIZE: 8
+    STEPS: 100

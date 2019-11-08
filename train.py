@@ -4,12 +4,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision
-import torch.nn.functional as F
 
 from config import cfg, load_from_yaml
 
 from data.fashion_mnist import  load_mnist, FashionMNISTDataset
-from lenet5 import LeNet5, Net
+from lenet5 import LeNet5
 
 from tensorboardX import SummaryWriter
 
@@ -25,7 +24,12 @@ def parse_args():
 def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer):
     model.train()
 
-    for batch_idx, (data, target) in enumerate(train_loader):
+    train_steps = len(train_loader)
+    if cfg.TRAIN.STEPS_PER_EPOCH != -1:
+        train_steps = cfg.TRAIN.STEPS_PER_EPOCH
+
+    for batch_idx in range(train_steps):
+        data, target = next(iter(train_loader))
         data, target = data.to(device), target.to(device).long()
 
         optimizer.zero_grad()
@@ -37,34 +41,44 @@ def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer):
         if batch_idx % cfg.TRAIN.LOG_INTERVAL == 0:
             tb_writer.add_scalar('train_loss', loss.item(), batch_idx + epoch * len(train_loader))
 
+            num_samples = batch_idx * cfg.TRAIN.BATCH_SIZE
+            tot_num_samples =  train_steps * cfg.TRAIN.BATCH_SIZE
+            completed = 100. * batch_idx / train_steps
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                       100. * batch_idx / len(train_loader), loss.item()))
+                epoch, num_samples, tot_num_samples, completed, loss.item()))
 
 
 def test(model, device, test_loader, criterion, tb_writer, tb_idx):
     model.eval()
-    test_loss = 0
+
+    val_steps = len(test_loader)
+    if cfg.TEST.STEPS != -1:
+        val_steps = cfg.TEST.STEPS
+
+    val_loss = 0
     correct = 0
     with torch.no_grad():
-        for data, target in test_loader:
+        for batch_idx in range(val_steps):
+            data, target = next(iter(test_loader))
             data, target = data.to(device), target.to(device).long()
 
             output = model(data)
-            test_loss += criterion(output, target).sum().item()
+            val_loss += criterion(output, target).mean().item()
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
 
-    test_loss /= len(test_loader.dataset)
+    val_loss /= val_steps
+    accuracy = 100. * correct / (val_steps * cfg.TEST.BATCH_SIZE )
 
-    tb_writer.add_scalar('val_loss', test_loss, tb_idx)
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}%\n'.format(val_loss, accuracy))
 
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+    tb_writer.add_scalar('val_loss', val_loss, tb_idx)
+    tb_writer.add_scalar('val_accuracy', accuracy, tb_idx)
+
+    return val_loss
 
 
-if __name__ == '__main__':
+def main():
     args = parse_args()
     load_from_yaml(args.cfg_path)
     print(cfg)
@@ -77,7 +91,7 @@ if __name__ == '__main__':
     test_images, test_labels = load_mnist(cfg.PATHS.DATASET, kind='t10k')
 
     # TODO: How to normalize ? Should I do it like MNIST ?
-    train_dataset = FashionMNISTDataset(train_images[:32], train_labels[:32], torchvision.transforms.ToTensor())
+    train_dataset = FashionMNISTDataset(train_images, train_labels, torchvision.transforms.ToTensor())
     test_dateset = FashionMNISTDataset(test_images, test_labels, torchvision.transforms.ToTensor())
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
@@ -90,12 +104,9 @@ if __name__ == '__main__':
         batch_size=cfg.TEST.BATCH_SIZE, shuffle=True, **kwargs
     )
 
-    # TODO: Start with SGD and then try other methods.
     model = LeNet5().to(device)
-
-    # TODO: How to add the lr schedule in the paper ?
     optimizer = optim.SGD(model.parameters(), lr=cfg.TRAIN.LR, momentum=cfg.TRAIN.MOMENTUM)
-    #optimizer = optim.Adam(model.parameters(), lr=0.003)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
     criterion = nn.NLLLoss()
 
@@ -104,6 +115,11 @@ if __name__ == '__main__':
 
     for epoch in range(cfg.TRAIN.EPOCHS):
         train(model, device, train_loader, optimizer, criterion, epoch, tb_writer)
+        tb_test_idx = epoch * (len(train_loader) + 1)
+        val_loss = test(model, device, test_loader, criterion, tb_writer, tb_test_idx)
+        # Update LR.
+        scheduler.step(val_loss)
 
-        # tb_test_idx = epoch * (len(train_loader) + 1)
-        # test(model, device, test_loader, criterion, tb_writer, tb_test_idx)
+
+if __name__ == '__main__':
+    main()

@@ -87,6 +87,8 @@ def main():
     device = torch.device('cuda' if use_cuda else 'cpu')
     print('Available device: ', device)
 
+    torch.manual_seed(0)
+
     train_images, train_labels = load_mnist(cfg.PATHS.DATASET, kind='train')
     test_images, test_labels = load_mnist(cfg.PATHS.DATASET, kind='t10k')
 

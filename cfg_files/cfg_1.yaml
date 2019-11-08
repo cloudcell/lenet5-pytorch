@@ -12,7 +12,7 @@ TRAIN:
     BATCHNORM: False
     DROPOUT: False
     LOG_INTERVAL: 30
-    LOG_DIR: "./logs/runs_17"
+    LOG_DIR: "./logs/runs_18"
 
 TEST:
     BATCH_SIZE: 8

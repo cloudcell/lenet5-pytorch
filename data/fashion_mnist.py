@@ -3,7 +3,6 @@ import gzip
 import numpy as np
 
 from torch.utils import data
-import torchvision
 
 
 def load_mnist(path, kind='train'):
@@ -43,16 +42,3 @@ class FashionMNISTDataset(data.Dataset):
 
         y = self.labels[idx]
         return X, y
-
-
-if __name__ == '__main__':
-    path = '/Users/maorshutman/data/FashionMNIST'
-    images, labels = load_mnist(path, kind='train')
-
-    ds = FashionMNISTDataset(images, labels, torchvision.transforms.ToTensor())
-    print(len(ds))
-
-    X, y = ds[0]
-    import matplotlib.pyplot as plt
-    plt.imshow(X.numpy()[0, ::])
-    plt.show()

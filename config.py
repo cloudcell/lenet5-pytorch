@@ -5,7 +5,7 @@ _C = CN()
 _C.DEVICE = 'cuda'
 
 _C.PATHS = CN()
-_C.PATHS.DATA = '/Users/maorshutman/data/FashionMNIST'
+_C.PATHS.DATASET = '/Users/maorshutman/data/FashionMNIST'
 
 _C.TRAIN = CN()
 _C.TRAIN.BATCH_SIZE = 32
@@ -22,3 +22,11 @@ _C.TEST.BATCH_SIZE = 32
 
 
 cfg = _C
+
+
+def load_from_yaml(path):
+    import yaml
+    with open(path, 'r') as f:
+        cfg_dict = yaml.load(f)
+    tmp = CN(cfg_dict)
+    cfg.merge_from_other_cfg(tmp)

@@ -27,7 +27,6 @@ def load_mnist(path, kind='train'):
 
 
 class FashionMNISTDataset(data.Dataset):
-    """Loads the data directly to memory."""
     def __init__(self, images, labels, transform=None):
         self.images = images
         self.labels = labels

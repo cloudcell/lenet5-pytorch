@@ -3,6 +3,10 @@ import torch.nn as nn
 
 
 class LeNet5(nn.Module):
+    """This implementation follows closely the paper:
+    "Gradient-Based Learning Applied to Document Recognition", by LeCun et al.
+    The network is adapted to work with images of size 28 x 28.
+    """
     def __init__(self):
         super(LeNet5, self).__init__()
 

@@ -1,3 +1,4 @@
+import os
 import argparse
 
 import torch
@@ -7,6 +8,7 @@ import torchvision
 
 from config import cfg, load_from_yaml
 
+from train_logger import TrainLogger
 from data.fashion_mnist import  load_mnist, FashionMNISTDataset
 from lenet5 import LeNet5
 
@@ -21,7 +23,7 @@ def parse_args():
     return args
 
 
-def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer):
+def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, logger):
     model.train()
 
     train_steps = len(train_loader)
@@ -39,7 +41,9 @@ def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer):
         optimizer.step()
 
         if batch_idx % cfg.TRAIN.LOG_INTERVAL == 0:
-            tb_writer.add_scalar('train_loss', loss.item(), batch_idx + epoch * len(train_loader))
+            tb_idx = batch_idx + epoch * len(train_loader)
+            tb_writer.add_scalar('train_loss', loss.item(), tb_idx)
+            logger.add_train(loss, tb_idx)
 
             num_samples = batch_idx * cfg.TRAIN.BATCH_SIZE
             tot_num_samples =  train_steps * cfg.TRAIN.BATCH_SIZE
@@ -48,7 +52,7 @@ def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer):
                 epoch, num_samples, tot_num_samples, completed, loss.item()))
 
 
-def test(model, device, test_loader, criterion, tb_writer, tb_idx):
+def test(model, device, test_loader, criterion, tb_writer, tb_idx, logger):
     model.eval()
 
     val_steps = len(test_loader)
@@ -74,6 +78,7 @@ def test(model, device, test_loader, criterion, tb_writer, tb_idx):
 
     tb_writer.add_scalar('val_loss', val_loss, tb_idx)
     tb_writer.add_scalar('val_accuracy', accuracy, tb_idx)
+    logger.add_val(val_loss, accuracy, tb_idx)
 
     return val_loss
 
@@ -115,12 +120,23 @@ def main():
     # TensorboardX writer.
     tb_writer = SummaryWriter(cfg.TRAIN.LOG_DIR, flush_secs=1)
 
+    logger = TrainLogger()
+
     for epoch in range(cfg.TRAIN.EPOCHS):
-        train(model, device, train_loader, optimizer, criterion, epoch, tb_writer)
+        train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, logger)
         tb_test_idx = epoch * (len(train_loader) + 1)
-        val_loss = test(model, device, test_loader, criterion, tb_writer, tb_test_idx)
+        val_loss = test(model, device, test_loader, criterion, tb_writer, tb_test_idx, logger)
+
         # Update LR.
         scheduler.step(val_loss)
+
+        # Save checkpoint.
+        if cfg.PATHS.CHECKPOINTS_PATH != '':
+            checkpoint_path = os.path.join(
+                cfg.PATHS.CHECKPOINTS_PATH, 'lenet5_epoch_' + str(epoch) + '.pt')
+            torch.save(model.state_dict(), checkpoint_path)
+
+    tb_writer.close()
 
 
 if __name__ == '__main__':

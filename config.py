@@ -5,7 +5,8 @@ _C = CN()
 _C.DEVICE = 'cuda'
 
 _C.PATHS = CN()
-_C.PATHS.DATASET = '/Users/maorshutman/data/FashionMNIST'
+_C.PATHS.DATASET = ''
+_C.PATHS.CHECKPOINTS_PATH = ''
 
 _C.TRAIN = CN()
 _C.TRAIN.BATCH_SIZE = 32

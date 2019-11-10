@@ -1,0 +1,23 @@
+DEVICE: "cuda"
+
+PATHS:
+    DATASET: "/raid/algo/SOCISP_SLOW/ADAS/Courses/tau_dl/data/FashionMNIST"
+    CHECKPOINTS_PATH: "./checkpoints"
+
+MODEL:
+    C3_NON_COMPLETE_CONN: True
+    ACTIVATION: 'tanh'
+
+TRAIN:
+    BATCH_SIZE: 64
+    LR: 0.01 # 5.0e-3
+    MOMENTUM: 0.9
+    EPOCHS: 20
+    STEPS_PER_EPOCH: -1
+
+    LOG_INTERVAL: 10
+    LOG_DIR: "./logs/runs_24"
+
+TEST:
+    BATCH_SIZE: 8
+    STEPS: 100

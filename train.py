@@ -46,10 +46,11 @@ def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, l
             logger.add_train(loss, tb_idx)
 
             num_samples = batch_idx * cfg.TRAIN.BATCH_SIZE
-            tot_num_samples =  train_steps * cfg.TRAIN.BATCH_SIZE
+            tot_num_samples = train_steps * cfg.TRAIN.BATCH_SIZE
             completed = 100. * batch_idx / train_steps
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, num_samples, tot_num_samples, completed, loss.item()))
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tLR: {:.2e}'.format(
+                epoch, num_samples, tot_num_samples, completed, loss.item(),
+                optimizer.param_groups[0]['lr']))
 
 
 def test(model, device, test_loader, criterion, tb_writer, tb_idx, logger):
@@ -72,7 +73,7 @@ def test(model, device, test_loader, criterion, tb_writer, tb_idx, logger):
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     val_loss /= val_steps
-    accuracy = 100. * correct / (val_steps * cfg.TEST.BATCH_SIZE )
+    accuracy = 100. * correct / (val_steps * cfg.TEST.BATCH_SIZE)
 
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}%\n'.format(val_loss, accuracy))
 
@@ -88,7 +89,7 @@ def main():
     load_from_yaml(args.cfg_path)
     print(cfg)
 
-    use_cuda = not cfg.DEVICE and torch.cuda.is_available()
+    use_cuda = (not cfg.DEVICE == 'cpu') and torch.cuda.is_available()
     device = torch.device('cuda' if use_cuda else 'cpu')
     print('Available device: ', device)
 
@@ -101,7 +102,9 @@ def main():
     train_dataset = FashionMNISTDataset(train_images, train_labels, torchvision.transforms.ToTensor())
     test_dateset = FashionMNISTDataset(test_images, test_labels, torchvision.transforms.ToTensor())
 
-    kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
+    # TODO: Add num_workers to cfg file.
+    #kwargs = {'num_workers': 4, 'pin_memory': True} if use_cuda else {}
+    kwargs = {'num_workers': 1}
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True, **kwargs
@@ -111,7 +114,12 @@ def main():
         batch_size=cfg.TEST.BATCH_SIZE, shuffle=True, **kwargs
     )
 
-    model = LeNet5().to(device)
+    model = LeNet5(
+        c3_non_comp_conn=cfg.MODEL.C3_NON_COMPLETE_CONN,
+        activation=cfg.MODEL.ACTIVATION
+    )
+    model.to(device)
+
     optimizer = optim.SGD(model.parameters(), lr=cfg.TRAIN.LR, momentum=cfg.TRAIN.MOMENTUM)
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 

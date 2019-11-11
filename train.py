@@ -9,7 +9,7 @@ import torchvision
 from config import cfg, load_from_yaml
 
 from train_logger import TrainLogger
-from data.fashion_mnist import  load_mnist, FashionMNISTDataset
+from data.fashion_mnist import load_mnist, FashionMNISTDataset
 from lenet5 import LeNet5
 
 from tensorboardX import SummaryWriter
@@ -103,7 +103,6 @@ def main():
     test_dateset = FashionMNISTDataset(test_images, test_labels, torchvision.transforms.ToTensor())
 
     # TODO: Add num_workers to cfg file.
-    #kwargs = {'num_workers': 4, 'pin_memory': True} if use_cuda else {}
     kwargs = {'num_workers': 1}
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -115,8 +114,10 @@ def main():
     )
 
     model = LeNet5(
-        c3_non_comp_conn=cfg.MODEL.C3_NON_COMPLETE_CONN,
-        activation=cfg.MODEL.ACTIVATION
+        orig_c3=cfg.MODEL.ORIG_C3,
+        orig_subsample=cfg.MODEL.ORIG_SUBSAMPLE,
+        activation=cfg.MODEL.ACTIVATION,
+        dropout=cfg.MODEL.DROPOUT
     )
     model.to(device)
 
@@ -128,6 +129,7 @@ def main():
     # TensorboardX writer.
     tb_writer = SummaryWriter(cfg.TRAIN.LOG_DIR, flush_secs=1)
 
+    # A simple logger is used for the losses.
     logger = TrainLogger()
 
     for epoch in range(cfg.TRAIN.EPOCHS):

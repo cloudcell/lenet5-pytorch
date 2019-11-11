@@ -5,19 +5,21 @@ PATHS:
     CHECKPOINTS_PATH: "./checkpoints"
 
 MODEL:
-    C3_NON_COMPLETE_CONN: True
+    ORIG_C3: False
+    ORIG_SUBSAMPLE: False
     ACTIVATION: 'tanh'
+    DROPOUT: 0.0
 
 TRAIN:
-    BATCH_SIZE: 64
-    LR: 0.01 # 5.0e-3
+    BATCH_SIZE: 256
+    LR: 1.0
     MOMENTUM: 0.9
     EPOCHS: 20
     STEPS_PER_EPOCH: -1
 
     LOG_INTERVAL: 10
-    LOG_DIR: "./logs/runs_24"
+    LOG_DIR: "./logs/runs_32"
 
 TEST:
-    BATCH_SIZE: 8
-    STEPS: 100
+    BATCH_SIZE: 256
+    STEPS: -1

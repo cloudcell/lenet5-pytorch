@@ -11,6 +11,8 @@ _C.PATHS.CHECKPOINTS_PATH = ''
 _C.MODEL = CN()
 _C.MODEL.C3_NON_COMPLETE_CONN = True
 _C.MODEL.ACTIVATION = 'relu'
+_C.MODEL.ORIG_C3 = True
+_C.MODEL.ORIG_SUBSAMPLE = True
 _C.MODEL.DROPOUT = 0.
 _C.BATCHNORM = False
 _C.L2_LOSS = False
@@ -38,5 +40,9 @@ def load_from_yaml(path):
     import yaml
     with open(path, 'r') as f:
         cfg_dict = yaml.load(f)
+    load_from_dict(cfg_dict)
+
+
+def load_from_dict(cfg_dict):
     tmp = CN(cfg_dict)
     cfg.merge_from_other_cfg(tmp)

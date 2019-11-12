@@ -19,6 +19,12 @@ class TrainLogger(object):
         self.val_loss.append(val_loss)
         self.val_acc.append(acc)
 
-    def plot_history(self, save_path=''):
-        # TODO
-        pass
+
+def plot_history(logger, save_path=None):
+    plt.plot(logger.train_idx, logger.train_loss, label='train loss')
+    plt.plot(logger.val_idx, logger.val_loss, label='val loss')
+    plt.plot(logger.val_idx, logger.val_acc, label='val accuracy')
+    plt.xlabel('step')
+    plt.legend()
+    plt.savefig(save_path, dpi=100)
+    plt.close()

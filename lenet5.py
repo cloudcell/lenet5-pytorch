@@ -10,16 +10,15 @@ class LeNet5(nn.Module):
     def __init__(self, orig_c3=True, orig_subsample=True, activation='tanh', dropout=0.0,
                  use_bn=True):
         super(LeNet5, self).__init__()
-        # This parameter allows to choose the implementation in the paper.
         self.orig_c3 = orig_c3
         self.orig_subsample = orig_subsample
-
         self.dropout = dropout
         self.activation_type = activation
         self.use_bn = use_bn
 
         # C1
-        self.c1 = nn.Conv2d(1, 6, 5)
+        # We pad the image to get an input size of 32x32 as for the original network.
+        self.c1 = nn.Conv2d(1, 6, 5, padding=(2,2))
         self.bn1 = nn.BatchNorm2d(6)
 
         # S2
@@ -41,11 +40,11 @@ class LeNet5(nn.Module):
             self.s4 = nn.MaxPool2d(2, 2)
 
         # C5
-        self.c5 = nn.Conv2d(16, 120, 5, bias=True, padding=(1, 1))
+        self.c5 = nn.Conv2d(16, 120, 5, bias=True)
         self.bn5 = nn.BatchNorm2d(120)
 
         # F6
-        self.f6 = nn.Linear(480, 84)  # 480 is for input of size 28x28
+        self.f6 = nn.Linear(120, 84)
         self.bn6 = nn.BatchNorm1d(84)
 
         # F7
@@ -56,14 +55,18 @@ class LeNet5(nn.Module):
 
         if self.activation_type == 'tanh':
             self.activation = nn.Tanh()
+        elif self.activation_type == 'sigmoid':
+            self.activation = nn.Sigmoid()
         elif self.activation_type == 'relu':
             self.activation = nn.ReLU()
+        elif self.activation == 'leaky_relu':
+            self.activation = nn.LeakyReLU()
         else:
             raise ValueError('Unsupported activation.')
 
-    def forward(self, im):
+    def forward(self, x):
         # C1
-        x = self.c1(im)
+        x = self.c1(x)
         x = self.bn1(x)
         x = self.activation(x)
 
@@ -89,7 +92,7 @@ class LeNet5(nn.Module):
         x = self.f6(x)
         x = self.bn6(x)
         x = self.activation(x)
-        #x = self.drop_layer(x)
+        x = self.drop_layer(x)
 
         x = self.f7(x)
         x = self.bn7(x)

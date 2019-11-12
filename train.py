@@ -8,7 +8,7 @@ import torchvision
 
 from config import cfg, load_from_yaml
 
-from train_logger import TrainLogger
+from train_logger import TrainLogger, plot_history
 from data.fashion_mnist import load_mnist, FashionMNISTDataset
 from lenet5 import LeNet5
 
@@ -23,7 +23,7 @@ def parse_args():
     return args
 
 
-def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, logger):
+def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, scheduler, logger):
     model.train()
 
     train_steps = len(train_loader)
@@ -41,8 +41,9 @@ def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, l
         optimizer.step()
 
         if batch_idx % cfg.TRAIN.LOG_INTERVAL == 0:
-            tb_idx = batch_idx + epoch * len(train_loader)
+            tb_idx = batch_idx + epoch * train_steps
             tb_writer.add_scalar('train_loss', loss.item(), tb_idx)
+            tb_writer.add_scalar('lr', optimizer.param_groups[0]['lr'], tb_idx)
             logger.add_train(loss, tb_idx)
 
             num_samples = batch_idx * cfg.TRAIN.BATCH_SIZE
@@ -51,6 +52,10 @@ def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, l
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tLR: {:.2e}'.format(
                 epoch, num_samples, tot_num_samples, completed, loss.item(),
                 optimizer.param_groups[0]['lr']))
+
+        scheduler.step()
+
+    return train_steps
 
 
 def test(model, device, test_loader, criterion, tb_writer, tb_idx, logger):
@@ -79,9 +84,7 @@ def test(model, device, test_loader, criterion, tb_writer, tb_idx, logger):
 
     tb_writer.add_scalar('val_loss', val_loss, tb_idx)
     tb_writer.add_scalar('val_accuracy', accuracy, tb_idx)
-    logger.add_val(val_loss, accuracy, tb_idx)
-
-    return val_loss
+    logger.add_val(val_loss, accuracy / 100., tb_idx)
 
 
 def main():
@@ -93,36 +96,37 @@ def main():
     device = torch.device('cuda' if use_cuda else 'cpu')
     print('Available device: ', device)
 
-    torch.manual_seed(0)
-
     train_images, train_labels = load_mnist(cfg.PATHS.DATASET, kind='train')
     test_images, test_labels = load_mnist(cfg.PATHS.DATASET, kind='t10k')
 
-    # TODO: How to normalize ? Should I do it like MNIST ?
-    train_dataset = FashionMNISTDataset(train_images, train_labels, torchvision.transforms.ToTensor())
-    test_dateset = FashionMNISTDataset(test_images, test_labels, torchvision.transforms.ToTensor())
+    transform = torchvision.transforms.ToTensor()
+    train_dataset = FashionMNISTDataset(train_images, train_labels, transform)
+    test_dateset = FashionMNISTDataset(test_images, test_labels, transform)
 
-    # TODO: Add num_workers to cfg file.
-    kwargs = {'num_workers': 1}
     train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True, **kwargs
-    )
+        train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True, num_workers=1)
+
     test_loader = torch.utils.data.DataLoader(
-        test_dateset,
-        batch_size=cfg.TEST.BATCH_SIZE, shuffle=True, **kwargs
-    )
+        test_dateset, batch_size=cfg.TEST.BATCH_SIZE, shuffle=True, num_workers=1)
 
     model = LeNet5(
         orig_c3=cfg.MODEL.ORIG_C3,
         orig_subsample=cfg.MODEL.ORIG_SUBSAMPLE,
         activation=cfg.MODEL.ACTIVATION,
-        dropout=cfg.MODEL.DROPOUT
+        dropout=cfg.MODEL.DROPOUT,
+        use_bn=cfg.MODEL.BATCHNORM
     )
     model.to(device)
 
-    optimizer = optim.SGD(model.parameters(), lr=cfg.TRAIN.LR, momentum=cfg.TRAIN.MOMENTUM)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+    optimizer = optim.SGD(model.parameters(),
+                          lr=cfg.TRAIN.LR,
+                          momentum=cfg.TRAIN.MOMENTUM,
+                          weight_decay=cfg.TRAIN.WEIGHT_DECAY)
+
+    #scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=3, eta_min=1.0e-4, last_epoch=-1)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1.e-4, max_lr=1., step_size_up=100, gamma=0.6)
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=1.0e-4, last_epoch=-1)
 
     criterion = nn.NLLLoss()
 
@@ -133,12 +137,10 @@ def main():
     logger = TrainLogger()
 
     for epoch in range(cfg.TRAIN.EPOCHS):
-        train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, logger)
-        tb_test_idx = epoch * (len(train_loader) + 1)
-        val_loss = test(model, device, test_loader, criterion, tb_writer, tb_test_idx, logger)
-
-        # Update LR.
-        scheduler.step(val_loss)
+        train_steps = train(model, device, train_loader, optimizer, criterion, epoch, tb_writer,
+                            scheduler, logger)
+        tb_test_idx = (epoch + 1) * train_steps
+        test(model, device, test_loader, criterion, tb_writer, tb_test_idx, logger)
 
         # Save checkpoint.
         if cfg.PATHS.CHECKPOINTS_PATH != '':
@@ -146,6 +148,7 @@ def main():
                 cfg.PATHS.CHECKPOINTS_PATH, 'lenet5_epoch_' + str(epoch) + '.pt')
             torch.save(model.state_dict(), checkpoint_path)
 
+    plot_history(logger, save_path=cfg.TRAIN.LOG_DIR + '/history.png')
     tb_writer.close()
 
 

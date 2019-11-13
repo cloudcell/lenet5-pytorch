@@ -67,7 +67,8 @@ class LeNet5(nn.Module):
     def forward(self, x):
         # C1
         x = self.c1(x)
-        x = self.bn1(x)
+        if self.use_bn:
+            x = self.bn1(x)
         x = self.activation(x)
 
         # S2
@@ -75,7 +76,8 @@ class LeNet5(nn.Module):
 
         # C3
         x = self.c3(x)
-        x = self.bn3(x)
+        if self.use_bn:
+            x = self.bn3(x)
         x = self.activation(x)
 
         # S4
@@ -83,19 +85,22 @@ class LeNet5(nn.Module):
 
         # C5
         x = self.c5(x)
-        x = self.bn5(x)
+        if self.use_bn:
+            x = self.bn5(x)
         x = self.activation(x)
 
         # F6, F7
         x = x.view(x.shape[0], -1)
 
         x = self.f6(x)
-        x = self.bn6(x)
+        if self.use_bn:
+            x = self.bn6(x)
         x = self.activation(x)
         x = self.drop_layer(x)
 
         x = self.f7(x)
-        x = self.bn7(x)
+        if self.use_bn:
+            x = self.bn7(x)
 
         x = nn.LogSoftmax(dim=1)(x)
         return x

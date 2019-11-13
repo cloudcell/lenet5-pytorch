@@ -12,6 +12,8 @@ from train_logger import TrainLogger, plot_history
 from data.fashion_mnist import load_mnist, FashionMNISTDataset
 from lenet5 import LeNet5
 
+from utils import model_checker
+
 from tensorboardX import SummaryWriter
 
 
@@ -92,6 +94,8 @@ def main():
     load_from_yaml(args.cfg_path)
     print(cfg)
 
+    torch.manual_seed(0)
+
     use_cuda = (not cfg.DEVICE == 'cpu') and torch.cuda.is_available()
     device = torch.device('cuda' if use_cuda else 'cpu')
     print('Available device: ', device)
@@ -117,6 +121,7 @@ def main():
         use_bn=cfg.MODEL.BATCHNORM
     )
     model.to(device)
+    model_checker(model, train_dataset, device)
 
     optimizer = optim.SGD(model.parameters(),
                           lr=cfg.TRAIN.LR,
@@ -124,8 +129,7 @@ def main():
                           weight_decay=cfg.TRAIN.WEIGHT_DECAY)
 
     #scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
-    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=3, eta_min=1.0e-4, last_epoch=-1)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1.e-4, max_lr=1., step_size_up=100, gamma=0.6)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1.e-4, max_lr=1., step_size_up=300, gamma=0.5)
     #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=1.0e-4, last_epoch=-1)
 
     criterion = nn.NLLLoss()

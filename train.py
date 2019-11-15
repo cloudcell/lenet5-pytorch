@@ -123,13 +123,18 @@ def main():
     model.to(device)
     model_checker(model, train_dataset, device)
 
-    optimizer = optim.SGD(model.parameters(),
-                          lr=cfg.TRAIN.LR,
-                          momentum=cfg.TRAIN.MOMENTUM,
-                          weight_decay=cfg.TRAIN.WEIGHT_DECAY)
+    # Load pretrained model if specified.
+    if cfg.TRAIN.PRETRAINED_PATH != '':
+        model.load_state_dict(torch.load(cfg.TRAIN.PRETRAINED_PATH))
 
-    #scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1.e-4, max_lr=1., step_size_up=300, gamma=0.5)
+    # optimizer = optim.SGD(model.parameters(),
+    #                       lr=cfg.TRAIN.LR,
+    #                       momentum=cfg.TRAIN.MOMENTUM,
+    #                       weight_decay=cfg.TRAIN.WEIGHT_DECAY)
+    optimizer = optim.Adam(model.parameters(), lr=3.0e-4)
+
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=1.0)  # TODO: tune at the very end
+    #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1.e-4, max_lr=1., step_size_up=300, gamma=1.0)
     #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=1.0e-4, last_epoch=-1)
 
     criterion = nn.NLLLoss()

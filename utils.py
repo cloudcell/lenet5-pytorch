@@ -1,7 +1,7 @@
 import os
 import torch
 
-from visualizer import Visualizer
+from visualizer import PredVisualizer
 
 
 def model_checker(model, dataset, device):
@@ -59,5 +59,5 @@ def eval(model, batch, device):
 def init_vis(dataset ,path, batch_size=16):
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
     batch = next(iter(loader))
-    vis = Visualizer(batch, path)
+    vis = PredVisualizer(batch, path)
     return vis

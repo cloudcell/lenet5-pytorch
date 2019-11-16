@@ -1,13 +1,11 @@
-import os
 import argparse
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision
-import torch.nn.functional as F
+from torchvision import transforms
 
-from config import cfg, load_from_yaml
+from config import cfg, load_from_dict
 
 from train_logger import TrainLogger, plot_history
 from data.fashion_mnist import load_mnist, FashionMNISTDataset
@@ -17,6 +15,9 @@ import utils
 from utils import model_checker, save_checkpoint, load_checkpoint
 
 from tensorboardX import SummaryWriter
+
+import sacred
+ex = sacred.Experiment()
 
 
 def parse_args():
@@ -97,13 +98,9 @@ def test(model, device, test_loader, criterion, tb_writer, tb_idx, logger):
     logger.add_val(val_loss, accuracy / 100., tb_idx)
 
 
+@ex.main
 def main():
-    args = parse_args()
-    load_from_yaml(args.cfg_path)
-    print(cfg)
-
     torch.manual_seed(0)
-
     use_cuda = (not cfg.DEVICE == 'cpu') and torch.cuda.is_available()
     device = torch.device('cuda' if use_cuda else 'cpu')
     print('Available device: ', device)
@@ -111,7 +108,13 @@ def main():
     train_images, train_labels = load_mnist(cfg.PATHS.DATASET, kind='train')
     test_images, test_labels = load_mnist(cfg.PATHS.DATASET, kind='t10k')
 
-    transform = torchvision.transforms.ToTensor()
+    transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(10),
+        transforms.ToTensor()
+    ])
+
     train_dataset = FashionMNISTDataset(train_images, train_labels, transform)
     test_dateset = FashionMNISTDataset(test_images, test_labels, transform)
 
@@ -171,4 +174,17 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    #args = parse_args()
+    # --cfg_path=/Users/maorshutman/repos/lenet5-pytorch/cfg_files/cfg.yaml
+
+    # Use Sacred for experiments management.
+    #ex.add_config(args.cfg_path)
+
+    ex.add_config('./cfg_files/cfg.yaml')
+    ex.observers.append(sacred.observers.FileStorageObserver('./runs'))
+
+    # Load into a YACS global config object.
+    load_from_dict(ex.configurations[0]._conf)
+    print(cfg)
+
+    ex.run()

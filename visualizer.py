@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-class Visualizer(object):
+class PredVisualizer(object):
     """A simple prediction dynamics visualizer for classifiers."""
     def __init__(self, batch, save_dir):
         self.save_dir = save_dir
@@ -26,8 +26,10 @@ class Visualizer(object):
                 plt.bar(classes, p[idx, :].numpy())
                 gt_label = str(self.batch[1].numpy()[idx])
                 plt.title('GT = ' + gt_label)
-                plt.xticks(classes)
+                plt.xticks(classes, fontsize=8)
+                plt.yticks(fontsize=8)
+                plt.ylim((0., 1.))
         plt.tight_layout()
 
-        plt.savefig(self.save_dir + '/vis_' + str(step) + '.png', dpi=600)
+        plt.savefig(self.save_dir + '/vis_' + '{:05d}'.format(step) + '.png', dpi=600)
         plt.close()

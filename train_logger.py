@@ -21,9 +21,8 @@ class TrainLogger(object):
 
 
 def plot_history(logger, save_path=None):
-    plt.plot(logger.train_idx, logger.train_loss, label='train loss')
-    plt.plot(logger.val_idx, logger.val_loss, label='val loss')
-    #plt.plot(logger.val_idx, logger.val_acc, label='val accuracy')
+    plt.plot(logger.train_idx, logger.train_loss, label='train loss', linewidth=0.8)
+    plt.plot(logger.val_idx, logger.val_loss, label='val loss', linewidth=0.8)
     plt.xlabel('step')
     plt.legend()
     plt.savefig(save_path, dpi=500)

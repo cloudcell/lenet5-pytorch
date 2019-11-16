@@ -1,7 +1,6 @@
 import os
 import gzip
 import numpy as np
-
 from torch.utils import data
 
 

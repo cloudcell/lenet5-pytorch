@@ -99,8 +99,8 @@ class LeNet5(nn.Module):
         x = self.drop_layer(x)
 
         x = self.f7(x)
-        if self.use_bn:
-            x = self.bn7(x)
+        # if self.use_bn:
+        #     x = self.bn7(x)
 
         x = nn.LogSoftmax(dim=1)(x)
         return x

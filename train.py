@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision
+import torch.nn.functional as F
 
 from config import cfg, load_from_yaml
 
@@ -12,7 +13,8 @@ from train_logger import TrainLogger, plot_history
 from data.fashion_mnist import load_mnist, FashionMNISTDataset
 from lenet5 import LeNet5
 
-from utils import model_checker
+import utils
+from utils import model_checker, save_checkpoint, load_checkpoint
 
 from tensorboardX import SummaryWriter
 
@@ -25,7 +27,8 @@ def parse_args():
     return args
 
 
-def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, scheduler, logger):
+def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, scheduler, logger,
+          visualizer):
     model.train()
 
     train_steps = len(train_loader)
@@ -54,6 +57,10 @@ def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, s
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tLR: {:.2e}'.format(
                 epoch, num_samples, tot_num_samples, completed, loss.item(),
                 optimizer.param_groups[0]['lr']))
+
+            # Evaluate on a fixed test batch for visualization.
+            preds = utils.eval(model, visualizer.batch, device)
+            visualizer.add_preds(torch.exp(preds).detach(), tb_idx)
 
         scheduler.step()
 
@@ -86,6 +93,7 @@ def test(model, device, test_loader, criterion, tb_writer, tb_idx, logger):
 
     tb_writer.add_scalar('val_loss', val_loss, tb_idx)
     tb_writer.add_scalar('val_accuracy', accuracy, tb_idx)
+    tb_writer.add_scalar('GE', val_loss - logger.train_loss[-1], tb_idx)
     logger.add_val(val_loss, accuracy / 100., tb_idx)
 
 
@@ -125,7 +133,7 @@ def main():
 
     # Load pretrained model if specified.
     if cfg.TRAIN.PRETRAINED_PATH != '':
-        model.load_state_dict(torch.load(cfg.TRAIN.PRETRAINED_PATH))
+        load_checkpoint(model, cfg.TRAIN.PRETRAINED_PATH)
 
     # optimizer = optim.SGD(model.parameters(),
     #                       lr=cfg.TRAIN.LR,
@@ -145,17 +153,18 @@ def main():
     # A simple logger is used for the losses.
     logger = TrainLogger()
 
+    # Init a visualizer on a fixed test batch.
+    vis = utils.init_vis(test_dateset, cfg.TRAIN.LOG_DIR)
+
     for epoch in range(cfg.TRAIN.EPOCHS):
         train_steps = train(model, device, train_loader, optimizer, criterion, epoch, tb_writer,
-                            scheduler, logger)
+                            scheduler, logger, vis)
         tb_test_idx = (epoch + 1) * train_steps
         test(model, device, test_loader, criterion, tb_writer, tb_test_idx, logger)
 
         # Save checkpoint.
         if cfg.PATHS.CHECKPOINTS_PATH != '':
-            checkpoint_path = os.path.join(
-                cfg.PATHS.CHECKPOINTS_PATH, 'lenet5_epoch_' + str(epoch) + '.pt')
-            torch.save(model.state_dict(), checkpoint_path)
+            save_checkpoint(model, optimizer, epoch, cfg.PATHS.CHECKPOINTS_PATH)
 
     plot_history(logger, save_path=cfg.TRAIN.LOG_DIR + '/history.png')
     tb_writer.close()

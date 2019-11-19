@@ -5,6 +5,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import transforms
 
+from sklearn.model_selection import train_test_split
+
 from config import cfg, load_from_dict
 
 from train_logger import TrainLogger, plot_history
@@ -20,16 +22,18 @@ import sacred
 ex = sacred.Experiment()
 
 
+# --cfg_path=/Users/maorshutman/repos/lenet5-pytorch/cfg_files/cfg.yaml
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Train config.')
     parser.add_argument(
         '--cfg_path', type=str, required=True, help='Path to YAML config file.')
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, scheduler, logger,
-          visualizer):
+          visualizer=None):
     model.train()
 
     train_steps = len(train_loader)
@@ -60,8 +64,9 @@ def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, s
                 optimizer.param_groups[0]['lr']))
 
             # Evaluate on a fixed test batch for visualization.
-            preds = utils.eval(model, visualizer.batch, device)
-            visualizer.add_preds(torch.exp(preds).detach(), tb_idx)
+            if visualizer is not None:
+                preds = utils.eval(model, visualizer.batch, device)
+                visualizer.add_preds(torch.exp(preds).detach(), tb_idx)
 
         scheduler.step()
 
@@ -105,7 +110,10 @@ def main():
     device = torch.device('cuda' if use_cuda else 'cpu')
     print('Available device: ', device)
 
-    train_images, train_labels = load_mnist(cfg.PATHS.DATASET, kind='train')
+    images, labels = load_mnist(cfg.PATHS.DATASET, kind='train')
+    train_images, val_images, train_labels, val_labels = train_test_split(
+        images, labels, test_size=cfg.TRAIN.VAL_SIZE, random_state=0)
+
     test_images, test_labels = load_mnist(cfg.PATHS.DATASET, kind='t10k')
 
     transform = transforms.Compose([
@@ -116,10 +124,14 @@ def main():
     ])
 
     train_dataset = FashionMNISTDataset(train_images, train_labels, transform)
+    val_dataset = FashionMNISTDataset(val_images, val_labels, transform)
     test_dateset = FashionMNISTDataset(test_images, test_labels, transform)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True, num_workers=1)
+
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=cfg.TEST.BATCH_SIZE, shuffle=True, num_workers=1)
 
     test_loader = torch.utils.data.DataLoader(
         test_dateset, batch_size=cfg.TEST.BATCH_SIZE, shuffle=True, num_workers=1)
@@ -138,13 +150,15 @@ def main():
     if cfg.TRAIN.PRETRAINED_PATH != '':
         load_checkpoint(model, cfg.TRAIN.PRETRAINED_PATH)
 
+    # TODO: Tune.
     # optimizer = optim.SGD(model.parameters(),
     #                       lr=cfg.TRAIN.LR,
     #                       momentum=cfg.TRAIN.MOMENTUM,
     #                       weight_decay=cfg.TRAIN.WEIGHT_DECAY)
     optimizer = optim.Adam(model.parameters(), lr=3.0e-4)
 
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=1.0)  # TODO: tune at the very end
+    # TODO: Tune.
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=1.0)
     #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1.e-4, max_lr=1., step_size_up=300, gamma=1.0)
     #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=1.0e-4, last_epoch=-1)
 
@@ -163,7 +177,7 @@ def main():
         train_steps = train(model, device, train_loader, optimizer, criterion, epoch, tb_writer,
                             scheduler, logger, vis)
         tb_test_idx = (epoch + 1) * train_steps
-        test(model, device, test_loader, criterion, tb_writer, tb_test_idx, logger)
+        test(model, device, val_loader, criterion, tb_writer, tb_test_idx, logger)
 
         # Save checkpoint.
         if cfg.PATHS.CHECKPOINTS_PATH != '':
@@ -172,15 +186,14 @@ def main():
     plot_history(logger, save_path=cfg.TRAIN.LOG_DIR + '/history.png')
     tb_writer.close()
 
+    # TODO: Evaluate on test set.
+
 
 if __name__ == '__main__':
-    #args = parse_args()
-    # --cfg_path=/Users/maorshutman/repos/lenet5-pytorch/cfg_files/cfg.yaml
+    args = parse_args()
 
     # Use Sacred for experiments management.
-    #ex.add_config(args.cfg_path)
-
-    ex.add_config('./cfg_files/cfg.yaml')
+    ex.add_config(args.cfg_path)
     ex.observers.append(sacred.observers.FileStorageObserver('./runs'))
 
     # Load into a YACS global config object.

@@ -13,7 +13,7 @@ def model_checker(model, dataset, device):
 
 def chart_dependencies(model, data):
     """Use backprop to chart dependencies in the model. This function checks
-    That the model does not mix the samples in an input batch.
+    that the model does not mix the samples in an input batch.
     """
     N = data.shape[0]
 

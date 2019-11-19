@@ -49,7 +49,7 @@ class LeNet5(nn.Module):
 
         # F7
         self.f7 = nn.Linear(84, 10)
-        self.bn7 = nn.BatchNorm1d(10)
+        #self.bn7 = nn.BatchNorm1d(10)
 
         self.drop_layer = nn.Dropout(self.dropout)
 
@@ -99,8 +99,6 @@ class LeNet5(nn.Module):
         x = self.drop_layer(x)
 
         x = self.f7(x)
-        # if self.use_bn:
-        #     x = self.bn7(x)
 
         x = nn.LogSoftmax(dim=1)(x)
         return x

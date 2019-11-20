@@ -31,5 +31,5 @@ class PredVisualizer(object):
                 plt.ylim((0., 1.))
         plt.tight_layout()
 
-        plt.savefig(self.save_dir + '/vis_' + '{:05d}'.format(step) + '.png', dpi=600)
+        plt.savefig(self.save_dir + '/vis_' + '{:05d}'.format(step) + '.png', dpi=200)
         plt.close()

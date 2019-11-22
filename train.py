@@ -73,34 +73,30 @@ def train(model, device, train_loader, optimizer, criterion, epoch, tb_writer, s
     return train_steps
 
 
-def test(model, device, test_loader, criterion, tb_writer, tb_idx, logger):
+def test(model, device, test_loader, criterion, batch_size=None, verbose=True):
     model.eval()
 
-    val_steps = len(test_loader)
-    if cfg.TEST.STEPS != -1:
-        val_steps = cfg.TEST.STEPS
-
-    val_loss = 0
+    steps = len(test_loader)
+    loss = 0
     correct = 0
+
     with torch.no_grad():
-        for batch_idx in range(val_steps):
+        for batch_idx in range(steps):
             data, target = next(iter(test_loader))
             data, target = data.to(device), target.to(device).long()
 
             output = model(data)
-            val_loss += criterion(output, target).mean().item()
+            loss += criterion(output, target).mean().item()
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
 
-    val_loss /= val_steps
-    accuracy = 100. * correct / (val_steps * cfg.TEST.BATCH_SIZE)
+    loss /= steps
+    accuracy = 100. * correct / (steps * batch_size)
 
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}%\n'.format(val_loss, accuracy))
+    if verbose:
+        print('\nTest set: Average loss: {:.4f}, Accuracy: {}%\n'.format(loss, accuracy))
 
-    tb_writer.add_scalar('val_loss', val_loss, tb_idx)
-    tb_writer.add_scalar('val_accuracy', accuracy, tb_idx)
-    tb_writer.add_scalar('GE', val_loss - logger.train_loss[-1], tb_idx)
-    logger.add_val(val_loss, accuracy / 100., tb_idx)
+    return loss, accuracy
 
 
 @ex.main
@@ -110,16 +106,19 @@ def main():
     device = torch.device('cuda' if use_cuda else 'cpu')
     print('Available device: ', device)
 
+    # Set up the data set.
     images, labels = load_mnist(cfg.PATHS.DATASET, kind='train')
     train_images, val_images, train_labels, val_labels = train_test_split(
         images, labels, test_size=cfg.TRAIN.VAL_SIZE, random_state=0)
 
     test_images, test_labels = load_mnist(cfg.PATHS.DATASET, kind='t10k')
 
+    # As all the images are aligned, we use only horizontal flips and small rotations for
+    # augmentation.
     transform = transforms.Compose([
         transforms.ToPILImage(),
         transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(10),
+        transforms.RandomRotation(5),
         transforms.ToTensor()
     ])
 
@@ -144,6 +143,7 @@ def main():
         use_bn=cfg.MODEL.BATCHNORM
     )
     model.to(device)
+    # Check model dependencies using backprop.
     model_checker(model, train_dataset, device)
 
     # Load pretrained model if specified.
@@ -173,11 +173,23 @@ def main():
     # Init a visualizer on a fixed test batch.
     vis = utils.init_vis(test_dateset, cfg.TRAIN.LOG_DIR)
 
+    # Train.
     for epoch in range(cfg.TRAIN.EPOCHS):
         train_steps = train(model, device, train_loader, optimizer, criterion, epoch, tb_writer,
                             scheduler, logger, vis)
+
         tb_test_idx = (epoch + 1) * train_steps
-        test(model, device, val_loader, criterion, tb_writer, tb_test_idx, logger)
+        val_loss, val_accuracy = test(model, device, val_loader, criterion, cfg.TEST.BATCH_SIZE)
+        train_loss, train_accuracy = test(model, device, train_loader, criterion, cfg.TEST.BATCH_SIZE)
+
+        # tb_writer.add_scalar('val_loss', loss, tb_test_idx)
+        tb_writer.add_scalar('val_accuracy', val_accuracy, tb_test_idx)
+        tb_writer.add_scalar('train_accuracy', train_accuracy, tb_test_idx)
+
+        tb_writer.add_scalar('GE', val_loss - train_loss, tb_test_idx)
+        tb_writer.add_scalars('val_train', {'val': val_loss,
+                                            'train': train_loss}, tb_test_idx)
+        logger.add_val(val_loss, val_accuracy / 100., tb_test_idx)
 
         # Save checkpoint.
         if cfg.PATHS.CHECKPOINTS_PATH != '':

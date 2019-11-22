@@ -5,7 +5,7 @@ from torch.utils import data
 
 
 def load_mnist(path, kind='train'):
-    """Load MNIST data from `path`"""
+    """Load MNIST data from `path`."""
     labels_path = os.path.join(path,
                                '%s-labels-idx1-ubyte.gz'
                                % kind)

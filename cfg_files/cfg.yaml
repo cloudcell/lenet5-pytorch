@@ -1,8 +1,9 @@
 DEVICE: "cuda"
+#DEVICE: "cpu"
 
 PATHS:
-    #DATASET: "/raid/algo/SOCISP_SLOW/ADAS/Courses/tau_dl/data/FashionMNIST"
-    DATASET: "/Users/maorshutman/data/FashionMNIST"
+    DATASET: "./data/FashionMNIST"
+    #DATASET: "/Users/maorshutman/data/FashionMNIST"
     CHECKPOINTS_PATH: "./checkpoints"
 
 MODEL:
@@ -17,7 +18,7 @@ TRAIN:
     #PRETRAINED_PATH: '/Users/maorshutman/repos/lenet5-pytorch/checkpoints/checkpoint_19.pt'
     PRETRAINED_PATH: ''
 
-    BATCH_SIZE: 256
+    BATCH_SIZE: 64
     EPOCHS: 20
     STEPS_PER_EPOCH: -1
 
@@ -26,7 +27,7 @@ TRAIN:
     WEIGHT_DECAY: 0.0
 
     LOG_INTERVAL: 10
-    LOG_DIR: "./logs/runs_63"
+    LOG_DIR: "./logs/runs_64"
 
 TEST:
     BATCH_SIZE: 256

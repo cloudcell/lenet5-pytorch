@@ -25,13 +25,24 @@ from tensorboardX import SummaryWriter
 import optuna
 
 
-# --cfg_path=/Users/maorshutman/repos/lenet5-pytorch/cfg_files/cfg.yaml
+# --cfg_path=./cfg_files/cfg.yaml
+# --hp_optim=False
+
+
+def bool_string(input_string):
+    if input_string not in {"True","False"}:
+        raise ValueError("Please Enter a valid Ture/False choice")
+    else:
+        return input_string == "True"
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train config.')
     parser.add_argument(
         '--cfg_path', type=str, required=True, help='Path to YAML config file.')
+    parser.add_argument(
+        '--hp_optim', type=bool_string, required=True, help='If True, perform a hyper-parameter'
+                                                            ' optimization using optuna.')
     return parser.parse_args()
 
 
@@ -65,6 +76,7 @@ def train(model, device, train_loader, optimizer, criterion, epoch, scheduler,
             num_samples = batch_idx * cfg.TRAIN.BATCH_SIZE
             tot_num_samples = train_steps * cfg.TRAIN.BATCH_SIZE
             completed = 100. * batch_idx / train_steps
+
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tLR: {:.2e}'.format(
                 epoch, num_samples, tot_num_samples, completed, loss.item(),
                 optimizer.param_groups[0]['lr']))
@@ -72,7 +84,7 @@ def train(model, device, train_loader, optimizer, criterion, epoch, scheduler,
             # Evaluate on a fixed test batch for visualization.
             if visualizer is not None:
                 preds = utils.eval(model, visualizer.batch, device)
-                visualizer.add_preds(torch.exp(preds).detach(), tb_idx)
+                #visualizer.add_preds(torch.exp(preds).detach(), tb_idx)
 
     # Advance the scheduler at the end of an epoch.
     scheduler.step()
@@ -175,18 +187,8 @@ def train_model(model, train_loader, val_loader, train_dataset, optimizer, crite
     return val_max_acc
 
 
-def objective(trial, train_loader, val_loader, train_dataset):
-    # Randomly chose a subset of the hyper-parameters.
-    cfg.MODEL.DROPOUT = trial.suggest_uniform('dropout', 0.0, 0.5)
-    cfg.TRAIN.LR = trial.suggest_loguniform('lr', 0.1, 1.0)
-    cfg.TRAIN.WEIGHT_DECAY = trial.suggest_loguniform('weight decay', 1.0e-6, 1.e-5)
-    cfg.TRAIN.GAMMA = trial.suggest_uniform('gamma', 0.6, 1.0)
-
-    val_max_acc = train_with_cfg(train_loader, val_loader, train_dataset)
-    return val_max_acc
-
-
 def train_with_cfg(train_loader, val_loader, train_dataset):
+    """Train with the parametrs defined in the YACS global config `cfg`."""
     use_cuda = (not cfg.DEVICE == 'cpu') and torch.cuda.is_available()
     device = torch.device('cuda' if use_cuda else 'cpu')
     print('Available device: ', device)
@@ -206,8 +208,20 @@ def train_with_cfg(train_loader, val_loader, train_dataset):
     criterion = nn.NLLLoss()
 
     val_max_acc = train_model(model, train_loader, val_loader, train_dataset, optimizer, criterion,
-                              scheduler, device, cfg, visualize=False)
+                              scheduler, device, cfg, visualize=True)
 
+    return val_max_acc
+
+
+def objective(trial, train_loader, val_loader, train_dataset):
+    """An objective function for the optuna optimizer."""
+    # Randomly chose a subset of the hyper-parameters.
+    cfg.MODEL.DROPOUT = trial.suggest_uniform('dropout', 0.0, 0.5)
+    cfg.TRAIN.LR = trial.suggest_loguniform('lr', 0.1, 1.0)
+    cfg.TRAIN.WEIGHT_DECAY = trial.suggest_loguniform('weight decay', 1.0e-6, 1.e-5)
+    cfg.TRAIN.GAMMA = trial.suggest_uniform('gamma', 0.6, 1.0)
+
+    val_max_acc = train_with_cfg(train_loader, val_loader, train_dataset)
     return val_max_acc
 
 
@@ -218,18 +232,20 @@ if __name__ == '__main__':
     load_from_yaml(args.cfg_path)
     print(cfg)
 
-    # torch.manual_seed(0)
+    torch.manual_seed(0)
+
     train_loader, val_loader, train_dataset, val_dataset = build_dataloaders()
 
-    # Hyper-parameter optimization.
-    study = optuna.create_study(
-        study_name='lenet5_hp_opt',
-        pruner=optuna.pruners.MedianPruner(),
-        storage='sqlite:///lenet5_hp_opt_10.db',
-        load_if_exists=True
-    )
-
-    # obj = lambda trial: objective(trial, train_loader, val_loader, train_dataset)
-    # study.optimize(obj, n_trials=1)
-
-    train_with_cfg(train_loader, val_loader, train_dataset)
+    if args.hp_optim:
+        # Hyper-parameter optimization.
+        study = optuna.create_study(
+            study_name='lenet5_hp_opt',
+            pruner=optuna.pruners.MedianPruner(),
+            storage='sqlite:///lenet5_hp_opt_1.db',
+            load_if_exists=True
+        )
+        obj = lambda trial: objective(trial, train_loader, val_loader, train_dataset)
+        study.optimize(obj, n_trials=100)
+    else:
+        # Train with the config specified in `cfg`.
+        train_with_cfg(train_loader, val_loader, train_dataset)

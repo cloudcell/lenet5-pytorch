@@ -19,6 +19,5 @@ python test.py \
 ## Performance
 We train the model on the FashionMNIST dataset. The model reaches an accuracy of 88.4% on the test set, and 90.4% on the validaiton set.
 Bellow we have a confusion matrix on the validation set for last epoch. The configuration used is ./cfg_file/cfg.yaml.
-Additional hyper-paramter and augmenation optimization probably can give a few more percent of accuracy.
 
 ![conf mat](/logs/run_1/conf_mat_14080.png)

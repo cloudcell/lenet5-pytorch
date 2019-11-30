@@ -1,5 +1,5 @@
 # lenet5-pytorch
-This repository contains an implemenation of the Lenet5 architecture. The original subsampling and C3 convolution layers where implemented according to the orginal paper: *LeCun, Yann, et al. "Object recognition with gradient-based learning." 1999*. The LeNet5 model implemented here allows to use more modern layes and activations like max_pooling, and ReLU.
+This repository contains an implemenation of the Lenet5 architecture. The original subsampling and C3 convolution layers where implemented according to the orginal paper: *LeCun, Yann, et al. "Object recognition with gradient-based learning." 1999*. The LeNet5 model implemented here allows to use more modern layes and activations like MaxPooling, and ReLU.
  
 ## Train
 ```bash
@@ -19,6 +19,6 @@ python test.py \
 ## Performance
 The model reaches an accuracy of 88.4% on the test set, and 90.4% on the validaiton set.
 Bellow we have a confusion matrix on the validation set for last epoch. The configuration used is ./cfg_file/cfg.yaml.
-Additional hyper-paramter and augmenation optimization proably can give a few more percent.
+Additional hyper-paramter and augmenation optimization probably can give a few more percent of accuracy.
 
 ![conf mat](/logs/run_1/conf_mat_14080.png)

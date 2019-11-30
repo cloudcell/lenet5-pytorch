@@ -1,6 +1,7 @@
 import os
 import torch
-
+import numpy as np
+import random
 from visualizer import PredVisualizer
 
 
@@ -56,8 +57,44 @@ def eval(model, batch, device):
     return preds
 
 
-def init_vis(dataset ,path, batch_size=16):
-    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    batch = next(iter(loader))
-    vis = PredVisualizer(batch, path)
+def init_vis(dataset ,path, n_classes=10, examples=4):
+    labels = dataset.labels
+    X = []
+    y = []
+
+    for i in range(n_classes):
+        y += examples * [i]
+        idxs = np.where(labels == i)[0][:examples]
+        X.append(dataset.images[idxs])
+
+    X = torch.FloatTensor(X).view(n_classes * examples, 1, 28, 28)
+    y = torch.FloatTensor(y).view(n_classes * examples)
+
+    vis = PredVisualizer((X, y), path, num_classes=n_classes, examples=examples)
     return vis
+
+
+class RandomGaussNoise(object):
+    def __init__(self, p=0.5, sigma=0.05):
+        self.p = p
+        self.sigma = sigma
+
+    def __call__(self, img):
+        if random.random() < self.p:
+            return img + self.sigma * torch.randn_like(img)
+        return img
+
+
+class RandomEraseCrop(object):
+    def __init__(self, p=0.5, size=5):
+        self.p = p
+        self.size = size
+
+    def __call__(self, img):
+        if random.random() < self.p:
+            _, H, W = img.shape
+            x_tl = random.randint(0, W - self.size)
+            y_tl = random.randint(0, H - self.size)
+            img[:, x_tl:x_tl+self.size, y_tl:y_tl+self.size] = 0.
+            return img
+        return img

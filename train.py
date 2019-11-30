@@ -10,14 +10,15 @@ from torchvision import transforms
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 
-from config import cfg, load_from_dict, load_from_yaml
+from config import cfg, load_from_yaml
 
 from train_logger import TrainLogger, plot_history
 from data.fashion_mnist import load_mnist, FashionMNISTDataset
-from lenet5 import LeNet5, Net
+from lenet5 import LeNet5
 
 import utils
 from utils import model_checker, save_checkpoint, load_checkpoint
+from test import test
 
 from tensorboardX import SummaryWriter
 
@@ -71,7 +72,7 @@ def train(model, device, train_loader, optimizer, criterion, epoch, scheduler,
             # Evaluate on a fixed test batch for visualization.
             if visualizer is not None:
                 preds = utils.eval(model, visualizer.batch, device)
-                #visualizer.add_preds(torch.exp(preds).detach(), tb_idx)
+                visualizer.add_preds(torch.exp(preds).detach(), tb_idx)
 
     # Advance the scheduler at the end of an epoch.
     scheduler.step()
@@ -79,65 +80,26 @@ def train(model, device, train_loader, optimizer, criterion, epoch, scheduler,
     return train_steps
 
 
-def test(model, device, test_loader, criterion, batch_size=None, verbose=True):
-    model.eval()
-
-    steps = len(test_loader)
-    loss = 0
-    correct = 0
-    targets = []
-    preds = []
-
-    with torch.no_grad():
-        for batch_idx, (data, target) in enumerate(test_loader):
-            data, target = data.to(device), target.to(device).long()
-
-            output = model(data)
-            loss += criterion(output, target).mean().item()
-            pred = output.argmax(dim=1)
-            correct += pred.eq(target.view_as(pred)).sum().item()
-
-            targets += list(target.cpu().numpy())
-            preds += list(pred.cpu().numpy())
-
-    loss /= steps
-    accuracy = 100. * correct / (steps * batch_size)
-
-    if verbose:
-        print('\nTest set: Average loss: {:.4f}, Accuracy: {}%\n'.format(loss, accuracy))
-
-    return loss, accuracy, targets, preds
-
-
-def objective(trial):
-    torch.manual_seed(0)
-    use_cuda = (not cfg.DEVICE == 'cpu') and torch.cuda.is_available()
-    device = torch.device('cuda' if use_cuda else 'cpu')
-    print('Available device: ', device)
-
+def build_dataloaders():
     # Set up the data set.
     images, labels = load_mnist(cfg.PATHS.DATASET, kind='train')
     train_images, val_images, train_labels, val_labels = train_test_split(
         images, labels, test_size=cfg.TRAIN.VAL_SIZE, random_state=0)
 
-    test_images, test_labels = load_mnist(cfg.PATHS.DATASET, kind='t10k')
-
-    # As all the images are aligned, we use only horizontal flips and small rotations for
-    # augmentation.
     train_transform = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(5),
-        transforms.ToTensor()
+        transforms.ToTensor(),
+        utils.RandomEraseCrop(p=0.1, size=4),
+        utils.RandomGaussNoise(p=0.1, sigma=0.05),
+        transforms.Normalize((0.5,), (0.5,))
     ])
 
     test_transofrm = transforms.Compose([
-        transforms.ToTensor()
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
     ])
 
     train_dataset = FashionMNISTDataset(train_images, train_labels, train_transform)
     val_dataset = FashionMNISTDataset(val_images, val_labels, test_transofrm)
-    test_dateset = FashionMNISTDataset(test_images, test_labels, test_transofrm)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=True, num_workers=1)
@@ -145,14 +107,15 @@ def objective(trial):
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=cfg.TEST.BATCH_SIZE, shuffle=True, num_workers=1)
 
-    # test_loader = torch.utils.data.DataLoader(
-    #     test_dateset, batch_size=cfg.TEST.BATCH_SIZE, shuffle=True, num_workers=1)
+    return train_loader, val_loader, train_dataset, val_dataset
 
+
+def build_model(device):
     model = LeNet5(
         orig_c3=cfg.MODEL.ORIG_C3,
         orig_subsample=cfg.MODEL.ORIG_SUBSAMPLE,
         activation=cfg.MODEL.ACTIVATION,
-        dropout=trial.suggest_uniform('dropout', 0.0, 0.2),
+        dropout=cfg.MODEL.DROPOUT,
         use_bn=cfg.MODEL.BATCHNORM
     )
 
@@ -164,20 +127,11 @@ def objective(trial):
     if cfg.TRAIN.PRETRAINED_PATH != '':
         load_checkpoint(model, cfg.TRAIN.PRETRAINED_PATH)
 
-    # TODO: Tune.
-    lr = trial.suggest_loguniform('lr', 1.0e-4, 1.0)
-    #weight_decay = trial.suggest_loguniform('weight decay', 1.0e-6, 0.1)
-    #momentum = trial.suggest_uniform('momentum', 0.0, 0.9)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    return model
 
-    # TODO: Tune.
-    gamma = trial.suggest_uniform('gamma', 0.3, 1.0)
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=gamma)
-    #scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1.e-4, max_lr=1., step_size_up=300, gamma=1.0)
-    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=1.0e-4, last_epoch=-1)
 
-    criterion = nn.NLLLoss()
-
+def train_model(model, train_loader, val_loader, train_dataset, optimizer, criterion, scheduler,
+                device, cfg, visualize=True):
     # TensorboardX writer.
     tb_writer = SummaryWriter(cfg.TRAIN.LOG_DIR, flush_secs=1)
 
@@ -185,10 +139,12 @@ def objective(trial):
     logger = TrainLogger()
 
     # Init a visualizer on a fixed test batch.
-    vis = utils.init_vis(test_dateset, cfg.TRAIN.LOG_DIR)
+    vis = None
+    if visualize:
+        vis = utils.init_vis(train_dataset, cfg.TRAIN.LOG_DIR)
 
     # Train.
-    val_accuracy = 0.0
+    val_max_acc = -1.
     for epoch in range(cfg.TRAIN.EPOCHS):
         train_steps = train(model, device, train_loader, optimizer, criterion, epoch,
                             scheduler, visualizer=vis, tb_writer=tb_writer, logger=logger)
@@ -199,40 +155,81 @@ def objective(trial):
 
         cm = confusion_matrix(targets, preds)
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-
         if vis is not None:
             vis.add_conf_mat(cm, tb_test_idx)
 
-        # The training set loss will allow us to see the generalization error.
-        train_loss, train_accuracy, _, _ = test(model, device, train_loader, criterion, cfg.TEST.BATCH_SIZE)
-
         tb_writer.add_scalar('val_loss', val_loss, tb_test_idx)
         tb_writer.add_scalar('val_accuracy', val_accuracy, tb_test_idx)
-        tb_writer.add_scalar('train_accuracy', train_accuracy, tb_test_idx)
-
-        tb_writer.add_scalar('GE', val_loss - train_loss, tb_test_idx)
-        tb_writer.add_scalars('val_train', {'val': val_loss,
-                                            'train': train_loss}, tb_test_idx)
-
         logger.add_val(val_loss, val_accuracy / 100., tb_test_idx)
 
         # Save checkpoint.
         if cfg.PATHS.CHECKPOINTS_PATH != '':
             save_checkpoint(model, optimizer, epoch, cfg.PATHS.CHECKPOINTS_PATH)
 
+        if val_accuracy >= val_max_acc:
+            val_max_acc = val_accuracy
+
     plot_history(logger, save_path=cfg.TRAIN.LOG_DIR + '/history.png')
     tb_writer.close()
 
-    return val_accuracy
+    return val_max_acc
+
+
+def objective(trial, train_loader, val_loader, train_dataset):
+    # Randomly chose a subset of the hyper-parameters.
+    cfg.MODEL.DROPOUT = trial.suggest_uniform('dropout', 0.0, 0.5)
+    cfg.TRAIN.LR = trial.suggest_loguniform('lr', 0.1, 1.0)
+    cfg.TRAIN.WEIGHT_DECAY = trial.suggest_loguniform('weight decay', 1.0e-6, 1.e-5)
+    cfg.TRAIN.GAMMA = trial.suggest_uniform('gamma', 0.6, 1.0)
+
+    val_max_acc = train_with_cfg(train_loader, val_loader, train_dataset)
+    return val_max_acc
+
+
+def train_with_cfg(train_loader, val_loader, train_dataset):
+    use_cuda = (not cfg.DEVICE == 'cpu') and torch.cuda.is_available()
+    device = torch.device('cuda' if use_cuda else 'cpu')
+    print('Available device: ', device)
+
+    model = build_model(device)
+    # Save the model with architecture.
+    torch.save(model, cfg.PATHS.CHECKPOINTS_PATH + '/model.pt')
+
+    optimizer = optim.SGD(
+        model.parameters(),
+        lr=cfg.TRAIN.LR,
+        momentum=cfg.TRAIN.MOMENTUM,
+        weight_decay=cfg.TRAIN.WEIGHT_DECAY
+    )
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=cfg.TRAIN.GAMMA)
+
+    criterion = nn.NLLLoss()
+
+    val_max_acc = train_model(model, train_loader, val_loader, train_dataset, optimizer, criterion,
+                              scheduler, device, cfg, visualize=False)
+
+    return val_max_acc
 
 
 if __name__ == '__main__':
     args = parse_args()
 
+    # Load configuration into a global YACS objects.
     load_from_yaml(args.cfg_path)
     print(cfg)
 
+    # torch.manual_seed(0)
+    train_loader, val_loader, train_dataset, val_dataset = build_dataloaders()
+
     # Hyper-parameter optimization.
-    study = optuna.create_study(study_name='lenet5_hp_opt_2',
-                                storage='sqlite:///lenet5_hp_opt_2.db', load_if_exists=True)
-    study.optimize(objective, n_trials=1)
+    study = optuna.create_study(
+        study_name='lenet5_hp_opt',
+        pruner=optuna.pruners.MedianPruner(),
+        storage='sqlite:///lenet5_hp_opt_10.db',
+        load_if_exists=True
+    )
+
+    # obj = lambda trial: objective(trial, train_loader, val_loader, train_dataset)
+    # study.optimize(obj, n_trials=1)
+
+    train_with_cfg(train_loader, val_loader, train_dataset)

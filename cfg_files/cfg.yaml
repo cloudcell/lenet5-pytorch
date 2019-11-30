@@ -1,9 +1,7 @@
 DEVICE: "cuda"
-#DEVICE: "cpu"
 
 PATHS:
     DATASET: "./data/FashionMNIST"
-    #DATASET: "/Users/maorshutman/data/FashionMNIST"
     CHECKPOINTS_PATH: "./checkpoints"
 
 MODEL:
@@ -11,23 +9,23 @@ MODEL:
     ORIG_SUBSAMPLE: False
     ACTIVATION: 'relu'
 
-    DROPOUT: 0.1
+    DROPOUT: 0.2
     BATCHNORM: True
 
 TRAIN:
-    #PRETRAINED_PATH: '/Users/maorshutman/repos/lenet5-pytorch/checkpoints/checkpoint_19.pt'
     PRETRAINED_PATH: ''
 
     BATCH_SIZE: 64
     EPOCHS: 20
     STEPS_PER_EPOCH: -1
 
-    LR: 1.0
+    LR: 0.5
     MOMENTUM: 0.9
-    WEIGHT_DECAY: 0.0
+    WEIGHT_DECAY: 1.0e-4
+    GAMMA: 0.7
 
     LOG_INTERVAL: 10
-    LOG_DIR: "./logs/runs_64"
+    LOG_DIR: "./logs/runs_65"
 
 TEST:
     BATCH_SIZE: 256

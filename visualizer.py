@@ -20,11 +20,13 @@ labels = [
 
 class PredVisualizer(object):
     """A simple prediction dynamics visualizer for classifiers."""
-    def __init__(self, batch, save_dir):
+    def __init__(self, batch, save_dir, num_classes=None, examples=None):
         self.save_dir = save_dir
         self.batch = batch  # (X, y) Torch tensor
         self.probs = []  # probabilities
         self.conf_mats = []
+        self.classes = num_classes
+        self.examples = examples
 
     def add_preds(self, probs, step):
         self.probs.append(probs)
@@ -36,17 +38,22 @@ class PredVisualizer(object):
 
     def _save_preds_vis(self, step):
         p = self.probs[-1]
-        N, C = p.shape
-        H = int(np.sqrt(N))
 
-        classes = range(C)
+        H, W = self.classes, self.examples
+        classes = range(self.classes)
+
+        plt.figure(figsize=(10, 14))
         for i in range(H):
-            for j in range(H):
-                idx = i * H + j
-                plt.subplot(H, H, idx + 1)
+            for j in range(W):
+                idx = i * W + j
+                plt.subplot(H, W, idx + 1)
+
                 plt.bar(classes, p[idx, :].cpu().numpy())
-                gt_label = str(self.batch[1].cpu().numpy()[idx])
-                plt.title('GT = ' + gt_label)
+                gt_label = int(self.batch[1].cpu().numpy()[idx])
+
+                if j == 0:
+                    plt.ylabel(labels[gt_label] + ', ' + str(gt_label))
+
                 plt.xticks(classes, fontsize=8)
                 plt.yticks(fontsize=8)
                 plt.ylim((0., 1.))

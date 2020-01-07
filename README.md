@@ -1,7 +1,7 @@
 # lenet5-pytorch
-This repository contains an implemenation of the Lenet5 architecture. The original subsampling and C3 convolution layers where implemented according to the orginal paper: *LeCun, Yann, et al. "Object recognition with gradient-based learning." 1999*. The LeNet5 model implemented here allows to use more modern layes and activations like MaxPooling, and ReLU.
+This repository contains an implemenation of the Lenet5 architecture. The original subsampling and C3 convolution layers where implemented according to the orginal paper: *LeCun, Yann, et al. "Object recognition with gradient-based learning." 1999*. The LeNet5 model implemented here allows to use more modern layes and activations like MaxPooling and ReLU.
 
-## Fahshion MNIST dataset
+## Fashion MNIST dataset
 See **Get the Data** at [https://github.com/zalandoresearch/fashion-mnist](https://github.com/zalandoresearch/fashion-mnist).
 
 ## Train
